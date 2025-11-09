@@ -26,7 +26,15 @@ def evaluate_img(model, img):
     mask = model(X)
 
     mask = F.sigmoid(mask[0, 0]).data.cpu().numpy()
-    mask = cv.resize(mask, (img_width, img_height), cv.INTER_AREA)
+    mask = cv.resize(mask, (img_width, img_height), cv.INTER_AREA)  
+    30 mask = cv.resize(mask, (img_width, img_height), cv.INTER_AREA)
+
+# استدعاء دالة القياس بعد الحصول على القناع
+# نستخدم 0.5 كمثال لمعامل القياس
+max_width_mm, max_width_pixels = measure_crack_dimensions(mask, scale_factor_mm_per_pixel=0.5)
+
+# يمكنك طباعة النتيجة هنا للتأكد
+print(f"Crack width: {max_width_mm} mm, Pixels: {max_width_pixels}") 
     return mask
 
 def evaluate_img_patch(model, img):
@@ -176,3 +184,49 @@ if __name__ == '__main__':
             plt.close('all')
 
         gc.collect()
+        def measure_crack_dimensions(mask, scale_factor_mm_per_pixel=0.5):
+    """
+    Calculates the maximum width and length of cracks from the segmentation mask.
+
+    :param mask: NumPy array representing the binary segmentation mask.
+    :param scale_factor_mm_per_pixel: Conversion factor (mm per pixel), needs calibration.
+    :return: max_width_mm, max_width_pixels
+    """
+    import cv2 as cv
+    import numpy as np 
+
+    # Convert the mask to 8-bit binary image for OpenCV processing
+    mask_8bit = (mask * 255).astype(np.uint8)
+
+    # Find contours of the cracks
+    contours, _ = cv.findContours(mask_8bit, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+
+    if not contours:
+        return 0.0, 0 # No crack found
+
+    max_width_pixels = 0
+    max_length_pixels = 0
+    
+    # Process each detected crack contour
+    for contour in contours:
+        # Calculate the minimum bounding rectangle for precise width/length
+        rect = cv.minAreaRect(contour)
+        (center, (width, height), angle) = rect
+        
+        # Length is the largest dimension, width is the smallest
+        current_length_pixels = max(width, height)
+        current_width_pixels = min(width, height)
+            
+        if current_width_pixels > max_width_pixels:
+            max_width_pixels = current_width_pixels
+            
+        if current_length_pixels > max_length_pixels:
+            max_length_pixels = current_length_pixels
+            
+    # Convert max dimensions to millimeters
+    max_width_mm = max_width_pixels * scale_factor_mm_per_pixel
+    max_length_mm = max_length_pixels * scale_factor_mm_per_pixel
+
+
+    return round(max_width_mm, 2), max_width_pixels
+    Finalize crack measurement feature
